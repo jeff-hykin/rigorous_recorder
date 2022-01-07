@@ -98,10 +98,10 @@ with collection.new_experiment() as record_keeper:
     model_2_losses = model2.sub_record_keeper(training=True)
     for each_index in range(1000):
         # one approach
-        model_2_losses.add_record(
-            index=each_index,
-            loss=random(),
-        )
+        model_2_losses.add_record({
+            "index": each_index,
+            "loss": random(),
+        })
         
         # alternative approach (same outcome)
         # - this way is very handy for adding data in one class method (loss func)
@@ -116,10 +116,10 @@ with collection.new_experiment() as record_keeper:
     model_2_evaluation = model2.sub_record_keeper(testing=True)
     for each_index in range(50):
         # one method
-        model_2_evaluation.add_record(
-            index=each_index,
-            accuracy=random(),
-        )
+        model_2_evaluation.add_record({
+            "index": each_index,
+            "accuracy": random(),
+        })
         
         # alternative way (same outcome)
         model_1_evaluation.pending_record["index"] = each_index
