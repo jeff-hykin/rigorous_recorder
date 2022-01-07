@@ -1,18 +1,19 @@
 [tool.poetry]
-name = "your_package_name"
-version = "0.1.0"
-description = "YOUR_DESCRIPTION"
+name = "rigorous_recorder"
+version = "0.0.1"
+description = "Save everything in a filterable way"
 authors=[]
 
 [tool.extra]
-author='YOUR_NAME_14057'
-author_email='YOUR_EMAIL'
-url='YOUR_GIT_REPO_URL'
+author='Jeff Hykin'
+author_email='jeff.hykin@gmail.com'
+url='https://github.com/jeff-hykin/rigorous_recorder.git'
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = ">=3.7,<3.10"
+python = ">=3.7,<3.12"
 pip = "20.1.1"
+super-hash = "1.0.5"
 
 [tool.poetry.dev-dependencies]
 twine = "3.4.1"

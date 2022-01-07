@@ -26,18 +26,18 @@ setuptools.setup(
     license=package_info["license"],
     packages=[package_info["name"]],
     install_requires=[
+        'super-hash == "1.0.5"',
         # examples:
         # 'aiohttp >= 3.7.4',
         # 'python-socketio >= 5.3.0',
-        # 'requests == 2.26.0',
     ],
     classifiers=[
         # examples:
         # 'Development Status :: 5 - Production/Stable',
-        # 'Intended Audience :: Developers',
-        # 'Programming Language :: Python',
-        # "Programming Language :: Python :: 3",
-        # "Operating System :: OS Independent",
+        'Intended Audience :: Developers',
+        'Programming Language :: Python',
+        "Programming Language :: Python :: 3",
+        "Operating System :: OS Independent",
     ],
     long_description=long_description,
     long_description_content_type="text/markdown",
