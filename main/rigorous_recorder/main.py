@@ -41,6 +41,8 @@ def attempt(a_lambda, default=None, expected_errors=(Exception,)):
     except expected_errors:
         return default
 
+def indent(string):
+    return string.replace("\n", "\n    ")
 
 # 
 # 
@@ -298,10 +300,7 @@ class RecordKeeper():
             return self.local_records
     
     def add_record(self, record):
-        if self.collection is not None:
-            return self.collection.add_record(record)
-        else:
-            return self.local_records.append(record)
+        return self.commit_record(additional_info=record)
     
     def swap_out(self, old_record_keeper, new_record_keeper):
         next_keeper = self
@@ -318,11 +317,21 @@ class RecordKeeper():
         # make sure the ancestors are the most up-to-date (swap_out can cause them to change since init)
         local_lineage = self.local_data_lineage
         self.pending_record.ancestors = local_lineage
-        # save a copy to disk
-        self.add_record(self.pending_record)
+        # save different depending on if part of a collection or not
+        output = self.pending_record
+        if self.collection is not None:
+            self.collection.add_record(self.pending_record)
+        else:
+            self.local_records.append(self.pending_record)
         # start a new clean record
         self.pending_record = AncestorDict(ancestors=local_lineage)
+        # return the record (AncestorDict) that was just committed
+        return output
         
+    @property
+    def number_of_records(self):
+        return len(self)
+    
     def sub_record_keeper(self, **kwargs):
         sub_record_keeper = RecordKeeper(
             parent_record_keeper=self,
@@ -347,8 +356,20 @@ class RecordKeeper():
     def __repr__(self):
         size = len(self)
         import json
-        representer = attempt(lambda: json.dumps(self.local_data, indent=4), default=self.local_data)
-        return f"""LocalData: {representer}\n\nNumber of records: {size}"""
+        # fallback case first
+        representer = attempt(lambda: indent(representer.__repr__()), default=self.local_data)
+        # ideal case
+        representer = attempt(lambda: indent(json.dumps(self.local_data, indent=4)), default=representer)
+        # parent data
+        all_parents = []
+        parent_data = "    {"
+        for each_key, each_value in self.parent_record_keeper.items():
+            parent_data += f'\n        "{each_key}":' + indent(
+                attempt(lambda: json.dumps(each_value, indent=4), default=f"{each_value}")
+            )
+        parent_data += "\n    }"
+        
+        return f"""{'{'}\n    number_of_records: {size},\n    records: [ ... ],\n    local_data: {representer},\n    parent_data:{parent_data}\n{'}'}"""
     
     def __getitem__(self, key):
         return self.pending_record[key]
