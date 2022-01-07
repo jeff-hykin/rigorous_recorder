@@ -1,13 +1,13 @@
 # What is this?
 
-I needed an efficient data logger for my machine learning experiments that I could easily query. Specifically, I needed to do cross-experiment comparisions
-- in a modular hierarchical way (not one big global logging variable)
-- but still having a flat table-like structure for performing queries/summaries
+I needed an efficient data logger for my machine learning experiments. Specifically one that
+- could log in a hierarchical way (not one big global logging variable)
+- while still having a flat table-like structure for performing queries/summaries
 - without having tons of duplicated data
 
 This library would work well with PySpark
 
-# What is a usecase example?
+# What is a Use-case Example?
 
 Lets say you're going to perform
 - 3 experiments
