@@ -114,19 +114,17 @@ with collection.new_experiment() as record_keeper:
     # 
     model_1_evaluation = model1.sub_record_keeper(testing=True)
     model_2_evaluation = model2.sub_record_keeper(testing=True)
-    for each_index in range(1000):
+    for each_index in range(50):
         # one method
-        model_2_losses.add_record(
+        model_2_evaluation.add_record(
             index=each_index,
-            loss=random(),
+            accuracy=random(),
         )
         
         # alternative way (same outcome)
-        # - very handy for adding data in a class method
-        #   while calling commit_record in a different class method
-        model_1_losses.pending_record["index"] = each_index
-        model_1_losses.pending_record["loss_1"] = random()
-        model_1_losses.commit_record()
+        model_1_evaluation.pending_record["index"] = each_index
+        model_1_evaluation.pending_record["accuracy"] = random()
+        model_1_evaluation.commit_record()
 
 
 # 
@@ -145,7 +143,7 @@ first_half_average_loss = average(tuple(each["loss"] for each in records_first_h
 # only for model 1
 model_1_first_half_loss = average(tuple(each["loss"] for each in records_first_half_of_time if each["model"] == "model1"))
 # only for model 2
-model_1_first_half_loss = average(tuple(each["loss"] for each in records_first_half_of_time if each["model"] == "model2"))
+model_2_first_half_loss = average(tuple(each["loss"] for each in records_first_half_of_time if each["model"] == "model2"))
 ```
 
 # What are some other details?
