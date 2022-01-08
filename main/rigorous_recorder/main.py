@@ -53,9 +53,9 @@ class AncestorDict(dict):
     def __init__(self, *, ancestors, itself=None):
         self.ancestors = ancestors
         if not isinstance(self.ancestors, (list, tuple)):
-            raise Exception('for self_custom_inherit(), ancestors needs to be a dict')
+            raise Exception('for AncestorDict(), ancestors needs to be a dict')
         if itself != None and type(self.itself) != dict:
-            raise Exception('for self_custom_inherit(), itself needs to be a pure dict')
+            raise Exception('for AncestorDict(), itself needs to be a pure dict')
         self.itself = itself or {}
     
     @property
@@ -154,120 +154,6 @@ class AncestorDict(dict):
     
     def __json__(self):
         return self.compressed
-    
-
-#%%
-class CustomInherit(dict):
-    def __init__(self, *, parent, data=None):
-        self.parent = parent
-        if not isinstance(self.parent, dict):
-            raise Exception('for CustomInherit(), parent needs to be a dict')
-        if data != None and type(self.data) != dict:
-            raise Exception('for CustomInherit(), data needs to be a pure dict')
-        self._self = data or {}
-    
-    @property
-    def self(self):
-        if not hasattr(self, "_self"):
-            self._self = {}
-        return self._self
-    
-    def keys(self):
-        self_keys = self.self.keys()
-        for each_key in self_keys:
-            yield each_key
-        self_keys = set(self_keys)
-        for each_key in self.parent.keys():
-            if each_key not in self_keys:
-                yield each_key
-    
-    def values(self):
-        self_keys = self.self.keys()
-        for each_key, each_value in self.self.items():
-            yield each_value
-        self_keys = set(self_keys)
-        for each_key, each_value in self.parent.items():
-            if each_key not in self_keys:
-                yield each_value
-    
-    def items(self):
-        self_keys = self.self.keys()
-        for each_key, each_value in self.self.items():
-            yield (each_key, each_value)
-        self_keys = set(self_keys)
-        for each_key, each_value in self.parent.items():
-            if each_key not in self_keys:
-                yield (each_key, each_value)
-    
-    @property
-    def ancestors(self):
-        current = self
-        ancestors = []
-        while hasattr(current, "parent") and current != current.parent:
-            ancestors.append(current.parent)
-            current = current.parent
-        return ancestors
-    
-    def __len__(self):
-        return len(tuple(self.keys()))
-    
-    def __iter__(self):
-        return (each for each in self.keys())
-    
-    def __contains__(self, key):
-        return key in self.parent or key in self.self
-        
-    def __getitem__(self, key):
-        if key in self.self:
-            return self.self[key]
-        else:
-            return self.parent.get(key, None)
-    
-    def __setitem__(self, key, value):
-        self.self[key] = value
-
-    def update(self, other):
-        self.self.update(other)
-    
-    def __repr__(self,):
-        copy = self.parent.copy()
-        copy.update(self.self)
-        import json
-        representer = attempt(lambda: json.dumps(self, indent=4), default=copy.__repr__())
-        return representer
-    
-    def get(self,*args,**kwargs):
-        copy = self.parent.copy()
-        copy.update(self.self)
-        return copy.get(*args,**kwargs)
-    
-    def copy(self,*args,**kwargs):
-        copy = self.parent.copy()
-        copy.update(self.self)
-        return copy.copy(*args,**kwargs)
-
-    def clone(self):
-        new_data = dict(self.self)
-        return CustomInherit(
-            parent=self.parent,
-            data=new_data
-        )
-    
-    def __getstate__(self):
-        return {
-            "_self": self.self,
-            "parent": self.parent,
-        }
-    
-    def __setstate__(self, state):
-        self._self = state["_self"]
-        self.parent = state["parent"]
-    
-    def __json__(self):
-        copy = self.parent.copy()
-        copy.update(self.self)
-        return copy
-    
 
 class RecordKeeper():
     def __init__(self, parent_record_keeper=None, local_data=None, collection=None, records=None, file_path=None):
@@ -351,7 +237,7 @@ class RecordKeeper():
         return len(tuple((each for each in self)))
     
     def __hash__(self):
-        return super_hash({ "CustomInherit": self.local_data })
+        return super_hash({ "AncestorDict": self.local_data })
         
     def __repr__(self):
         size = len(self)
