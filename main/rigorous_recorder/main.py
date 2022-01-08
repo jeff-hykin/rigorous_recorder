@@ -159,13 +159,13 @@ class RecordKeeper():
     def __init__(self, parent_record_keeper=None, local_data=None, collection=None, records=None, file_path=None):
         self.parent_record_keeper = parent_record_keeper
         self.local_data           = local_data or {}
-        self.file_path            = file_path
+        self.file_path            = file_path or (parent_record_keeper and parent_record_keeper.file_path)
         self.sub_record_keepers   = []
         self.pending_record       = AncestorDict(ancestors=self.local_data_lineage,)
-        self.collection           = collection
+        self.collection           = collection or (parent_record_keeper and parent_record_keeper.collection)
         self.local_records        = records or []
         if not isinstance(self.local_data, dict):
-            raise Exception('Parent needs to be a dict')
+            raise Exception(f'RecordKeeper(local_data=x) needs to be a dict, but instead was {local_data}')
     
     def local_data_lineage_generator(self):
         yield self.local_data
@@ -223,7 +223,6 @@ class RecordKeeper():
             parent_record_keeper=self,
             local_data=kwargs,
             collection=self.collection,
-            records=self.local_records,
             file_path=self.file_path,
         )
         self.sub_record_keepers.append(sub_record_keeper)
@@ -258,7 +257,7 @@ class RecordKeeper():
         return f"""{'{'}\n    number_of_records: {size},\n    records: [ ... ],\n    local_data: {representer},\n    parent_data:{parent_data}\n{'}'}"""
     
     def __getitem__(self, key):
-        return self.pending_record[key]
+        return self.local_data[key]
     
     def __setitem__(self, key, value):
         self.local_data[key] = value
@@ -464,20 +463,3 @@ class ExperimentCollection:
         self.ensure_loaded()
         return self._records
     
-    def add_notes(self, notes, records=None, extension=".pickle"):
-        import os
-        file_path = os.path.abspath(collection+extension)
-        collection_name = os.path.basename(file_path)[0:-len(extension)]
-        # default values
-        collection_keeper_local_data = {}
-        prev_experiment_parent_info = dict(experiment_number=0, error_number=0, had_error=False)
-        record_keepers = {}
-        records = records or []
-        # attempt load
-        try: collection_keeper_local_data, prev_experiment_parent_info, record_keepers, records = large_pickle_load(file_path)
-        except: print(f'Will creaete new experiment collection: {collection_name}')
-        # merge data
-        collection_keeper_local_data.update(notes)
-        # save updated data
-        data = (collection_keeper_local_data, prev_experiment_parent_info, record_keepers, records)
-        large_pickle_save(data, file_path)
