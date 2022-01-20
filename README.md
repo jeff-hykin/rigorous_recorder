@@ -5,7 +5,7 @@ I needed an efficient data logger for my machine learning experiments. Specifica
 - while still having a flat table-like structure for performing queries/summaries
 - without having tons of duplicated data
 
-This library would like work well with PySpark
+This library would likely work well with PySpark
 
 # What is a Use-case Example?
 
