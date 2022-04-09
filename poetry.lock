@@ -296,6 +296,14 @@ python-versions = ">=3.6"
 simple-namespace = "1.0.0"
 
 [[package]]
+name = "super-map"
+version = "1.2.1"
+description = "Like dict, but easier"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "toml"
 version = "0.10.2"
 description = "Python Library for Tom's Obvious, Minimal Language"
@@ -382,7 +390,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<3.12"
-content-hash = "e363dd74056db0738d5105a13fe598b82a2bfb7c1147ec675c99599977c32f9b"
+content-hash = "f585177922c164e15cf7a6e87dd6c7499d2c591bcc3f6e59cd197b387784df74"
 
 [metadata.files]
 bleach = [
@@ -554,6 +562,10 @@ six = [
 super-hash = [
     {file = "super_hash-1.0.5-py3-none-any.whl", hash = "sha256:b1f7eb4d1cf3bec40faf6da84bbd1539a5bb605231d542f829c0b9a0f3d2aad0"},
     {file = "super_hash-1.0.5.tar.gz", hash = "sha256:266cf1e04f31a5b530532d4c349ef9a311618fe102f094e9bfd0d7a1f93e55a6"},
+]
+super-map = [
+    {file = "super_map-1.2.1-py3-none-any.whl", hash = "sha256:d70e550bbc230cbb4b2ce2e25e05295a7e3b1b93c979831953b6cc2605b61b4e"},
+    {file = "super_map-1.2.1.tar.gz", hash = "sha256:0983bafc6ecc05eafc091834d312aeb1c3b24ca1d2e9d18ef86a5658a608bd10"},
 ]
 toml = [
     {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},

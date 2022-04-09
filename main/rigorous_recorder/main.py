@@ -1,6 +1,10 @@
 from time import time as now
 
 from super_hash import super_hash
+from super_map import Map, LazyDict
+
+# TODO:
+    # change the RecordKeeper file_path to an ID, and have the collection use an ID
 
 # 
 # helpers
@@ -156,23 +160,51 @@ class AncestorDict(dict):
         return self.compressed
 
 class RecordKeeper():
-    def __init__(self, parent_record_keeper=None, local_data=None, collection=None, records=None, file_path=None):
-        self.parent_record_keeper = parent_record_keeper
-        self.local_data           = local_data or {}
-        self.file_path            = file_path or (parent_record_keeper and parent_record_keeper.file_path)
-        self.sub_record_keepers   = []
-        self.pending_record       = AncestorDict(ancestors=self.local_data_lineage,)
-        self.collection           = collection or (parent_record_keeper and parent_record_keeper.collection)
-        self.local_records        = records or []
-        if not isinstance(self.local_data, dict):
-            raise Exception(f'RecordKeeper(local_data=x) needs to be a dict, but instead was {local_data}')
+    def __init__(self, *args, **kwargs):
+        """
+        Examples:
+            RecordKeeper()
+            RecordKeeper({"key_of_data": "value"})
+            RecordKeeper(key_of_data="value)
+            RecordKeeper({}, parent_record_keeper)
+        """
+        # properties (each are updated below)
+        self.local_data         = LazyDict()
+        self.sub_record_keepers = []
+        self.local_records      = []
+        self.parent             = None
+        self.pending_record     = AncestorDict(ancestors=tuple()) 
+        
+        # load local data
+        if len(args) == 1:
+            first_arg = args[0]
+            if isinstance(first_arg, dict):
+                self.local_data = LazyDict(first_arg)
+            else:
+                raise Exception(f'''\n\ncalled RecordKeeper(data)\nbut data was: {first_arg}\nwhich was not a dict (and this object only works if it is)\n''')
+        
+        self.local_data.update(kwargs)
+        
+        # these will be set menually when theyre used
+        self.collection = None
+        self.file_path  = None
+    
+    def set_parent(self, parent):
+        self.parent = parent
+        self.pending_record = AncestorDict(ancestors=self.local_data_lineage, itself=dict(self.pending_record.itself))
+        # attach self to parent
+        self.parent.sub_record_keepers.append(self)
+        self.collection = self.parent.collection
+        self.file_path  = self.parent.file_path
+        
+        return self
     
     def local_data_lineage_generator(self):
         yield self.local_data
         next_keeper = self
-        while isinstance(next_keeper.parent_record_keeper, RecordKeeper):
-            yield next_keeper.parent_record_keeper.local_data
-            next_keeper = next_keeper.parent_record_keeper
+        while isinstance(next_keeper.parent, RecordKeeper):
+            yield next_keeper.parent.local_data
+            next_keeper = next_keeper.parent
     
     @property
     def local_data_lineage(self):
@@ -180,24 +212,35 @@ class RecordKeeper():
     
     @property
     def records(self):
-        if self.collection is not None:
-            return self.collection.records
-        else:
+        if self.collection is None:
             return self.local_records
+        else:
+            # look through all the records, even if they weren't generated in this runtime/session
+            def generator():
+                for each_record in self.collection.records:
+                    # if this record was apart of a record, then report it
+                    if self.local_data in each_record.ancestors:
+                        yield each_record
+            return generator()
     
-    def add_record(self, record):
-        return self.commit_record(additional_info=record)
+    def push(self, *args, **kwargs):
+        data = {}
+        if len(args) > 0:
+            data = args[0]
+        data.update(kwargs)
+        self.commit(additional_info=data)
+        return self
+
+    def add(self, *args, **kwargs):
+        data = {}
+        if len(args) > 0:
+            data = args[0]
+        data.update(kwargs)
+        self.pending_record.update(data)
+        return self
     
-    def swap_out(self, old_record_keeper, new_record_keeper):
-        next_keeper = self
-        while isinstance(next_keeper.parent_record_keeper, RecordKeeper):
-            if id(next_keeper.parent_record_keeper) == id(old_record_keeper):
-                next_keeper.parent_record_keeper = new_record_keeper
-                return True
-            # TODO: add infinte loop check (like if next_keeper.parent_record_keeper == next_keeper) 
-            next_keeper = next_keeper.parent_record_keeper
-    
-    def commit_record(self,*, additional_info=None):
+
+    def commit(self,*, additional_info=None):
         # finalize the record
         (additional_info is not None) and self.pending_record.update(additional_info)
         # make sure the ancestors are the most up-to-date (swap_out can cause them to change since init)
@@ -213,30 +256,35 @@ class RecordKeeper():
         self.pending_record = AncestorDict(ancestors=local_lineage)
         # return the record (AncestorDict) that was just committed
         return output
-        
+    
+    def swap_out(self, old_record_keeper, new_record_keeper):
+        next_keeper = self
+        while isinstance(next_keeper.parent, RecordKeeper):
+            if id(next_keeper.parent) == id(old_record_keeper):
+                next_keeper.parent = new_record_keeper
+                return True
+            # TODO: add infinte loop check (like if next_keeper.parent == next_keeper) 
+            next_keeper = next_keeper.parent
+    
     @property
     def number_of_records(self):
         return len(self)
     
-    def sub_record_keeper(self, **kwargs):
-        sub_record_keeper = RecordKeeper(
-            parent_record_keeper=self,
-            local_data=kwargs,
-            collection=self.collection,
-            file_path=self.file_path,
-        )
-        self.sub_record_keepers.append(sub_record_keeper)
-        return sub_record_keeper
+    def SubRecordKeeper(self, **kwargs):
+        return RecordKeeper(kwargs).set_parent(self)
     
     def __iter__(self):
-        return (each for each in self.records if self.local_data in each.ancestors)
+        return self.records()
     
     def __len__(self):
-        # apparently this is the fastest way (no idea why converting to tuple is faster than using reduce)
-        return len(tuple((each for each in self)))
+        if self.collection is None:
+            return len(self.local_records)
+        else:
+            # apparently this is the fastest way (no idea why converting to tuple is faster than using reduce)
+            return len(tuple(self.records()))
     
     def __hash__(self):
-        return super_hash({ "AncestorDict": self.local_data })
+        return super_hash({ RecordKeeper: self.local_data })
         
     def __repr__(self):
         size = len(self)
@@ -248,7 +296,7 @@ class RecordKeeper():
         # parent data
         all_parents = []
         parent_data = "    {"
-        for each_key, each_value in self.parent_record_keeper.items():
+        for each_key, each_value in self.parent.items():
             parent_data += f'\n        "{each_key}":' + indent(
                 attempt(lambda: json.dumps(each_value, indent=4), default=f"{each_value}")
             )
@@ -257,36 +305,58 @@ class RecordKeeper():
         return f"""{'{'}\n    number_of_records: {size},\n    records: [ ... ],\n    local_data: {representer},\n    parent_data:{parent_data}\n{'}'}"""
     
     def __getitem__(self, key):
-        return self.local_data[key]
+        # numerical acts like array of local records 
+        if isinstance(key, (int, slice)):
+            return self.local_records[key]
+        # all else acts like dict of local data
+        else:
+            return self.local_data[key]
     
     def __setitem__(self, key, value):
-        self.local_data[key] = value
+        # numerical acts like array of local records 
+        if isinstance(key, (int, slice)):
+            self.local_records[key] = value
+        # all else acts like dict of local data
+        else:
+            self.local_data[key] = value
     
-    def __getattr__(self, key):
-        return self[key]
-    
-    def copy(self,*args,**kwargs):
-        return self.pending_record.copy(*args,**kwargs)
+    def get(self, key, default=None):
+        # numerical acts like array of local records 
+        if isinstance(key, (int, slice)):
+            try:
+                return self.local_records[key]
+            except Exception as error:
+                return default
+        # all else acts like dict of local data
+        else:
+            if key in self.local_data:
+                return self.local_data[key]
+            else:
+                return default
     
     def items(self, *args, **kwargs):
-        return self.pending_record.items(*args, **kwargs)
+        return self.local_data.items(*args, **kwargs)
     
     def keys(self, *args, **kwargs):
-        return self.pending_record.keys(*args, **kwargs)
+        return self.local_data.keys(*args, **kwargs)
     
     def values(self, *args, **kwargs):
-        return self.pending_record.values(*args, **kwargs)
+        return self.local_data.values(*args, **kwargs)
     
     def __getstate__(self):
-        return (self.parent_record_keeper, self.local_data, self.file_path, self.kids, self.pending_record, self.local_records)
+        return (self.parent, self.local_data, self.file_path, self.sub_record_keepers, self.pending_record, self.local_records)
     
     def __setstate__(self, state):
-        self.parent_record_keeper, self.local_data, self.file_path, self.kids, self.pending_record, self.local_records = state
+        self.parent, self.local_data, self.file_path, self.sub_record_keepers, self.pending_record, self.local_records = state
+        # collection can't be saved because then each record keeper would have link to all other record keepers, not just sub_record_keepers
+        # so its loaded based on the file path
         self.collection = None
         if self.file_path is not None:
+            # collection corrisponding to the file path, if it exists
+            # this is global var because of python pickling
+            # this re-attaches self.collection to the collection (which avoids pickling/unpickling the whole collection)
             self.collection = globals().get("_ExperimentCollection_register",{}).get(self.file_path, None)
-        if not isinstance(self.local_data, dict):
-            raise Exception('local_data needs to be a dict')
+            # TODO: there should be a requect for nanyak reconnection  if this fails
 
 class Experiment(object):
     def __init__(self, experiment_info_keeper, save_experiment):
@@ -311,7 +381,7 @@ class ExperimentCollection:
             for each in range(1000):
                 model_1_losses.pending_record["index"] = each
                 model_1_losses.pending_record["loss_1"] = random()
-                model_1_losses.commit_record()
+                model_1_losses.commit()
     Note:
         the top most record keeper will be automatically be given these values:
         - experiment_number
@@ -325,20 +395,16 @@ class ExperimentCollection:
     # TODO: make it so that Experiments uses database with detached/reattached pickled objects instead of a single pickle file
     
     def __init__(self, file_path, records=None, extension=".pickle"):
-        self.file_path              = file_path+extension
-        self.experiment_info_keeper = None
-        self.collection_name        = ""
-        self.experiment_keeper      = None
-        self._records               = records or []
-        self.record_keepers         = {}
-        self.prev_experiment_local_data = None
-        self.collection_keeper      = RecordKeeper(
-            parent_record_keeper=None,
-            local_data={},
-            collection=self,
-            records=self._records,
-            file_path=self.file_path,
-        )
+        self.file_path                    = file_path+extension
+        self.collection_name              = ""
+        self.experiment_info_keeper       = None
+        self.experiment_keeper            = None
+        self.prev_experiment_local_data   = None
+        self._records                     = records or []
+        self.collection_keeper            = RecordKeeper({})
+        # attache the collection_keeper to the collection (making it kind of special)
+        self.collection_keeper.collection = self
+        self.collection_keeper.file_path  = self.file_path
         
         import os
         self.file_path = os.path.abspath(self.file_path)
@@ -354,13 +420,15 @@ class ExperimentCollection:
         # it really just needs its parents/children
         # however, it still needs a refernce to the experiment_collection to get access to all the records
         # so this register is used as a way for it to reconnect, based on the file_path of the collection
+        # NOTE: this could cause problems when moving the collection
+        # TODO: look into the "dill" package as a possible alternative, or just create a
         register = globals()["_ExperimentCollection_register"] = globals().get("_ExperimentCollection_register", {})
         register[self.file_path] = self
         
         self.prev_experiment_local_data = self.prev_experiment_local_data or dict(experiment_number=0, error_number=0, had_error=False)
         if not self._records and self.file_path:
             if os.path.isfile(self.file_path):
-                self.collection_keeper.local_data, self.prev_experiment_local_data, self.record_keepers, self._records = large_pickle_load(self.file_path)
+                self.collection_keeper.local_data, self.prev_experiment_local_data, self._records = large_pickle_load(self.file_path)
             else:
                 print(f'Will create new experiment collection: {self.collection_name}')
     
@@ -421,10 +489,6 @@ class ExperimentCollection:
                 experiment_info["had_error"] = False
                 experiment_info["error_number"] = 0
             
-            # refresh the all_record_keepers dict
-            # especially after mutating the self.experiment_keeper.local_data
-            # (this ends up acting like a set, but keys are based on mutable values)
-            self.record_keepers = { super_hash(each_value) : each_value for each_value in self.record_keepers.values() }
             
             # 
             # save to file
@@ -432,7 +496,7 @@ class ExperimentCollection:
             # ensure folder exists
             import os;os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
             self.prev_experiment_local_data = self.experiment_keeper.local_data
-            data = (self.collection_keeper.local_data, self.experiment_keeper.local_data, self.record_keepers, self._records)
+            data = (self.collection_keeper.local_data, self.experiment_keeper.local_data, self._records)
             # update self encase multiple experiments are run without re-reading the file
             print("Saving "+str(len(self._records))+" records")
             large_pickle_save(data, self.file_path)

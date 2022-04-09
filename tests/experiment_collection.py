@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from rigorous_recorder import RecordKeeper, ExperimentCollection
 
 from statistics import mean as average
