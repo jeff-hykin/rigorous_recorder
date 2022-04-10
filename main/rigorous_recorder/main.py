@@ -196,7 +196,6 @@ class RecordKeeper():
     def set_parent(self, parent):
         self.parent = parent
         self.pending_record = AncestorDict(ancestors=self.local_data_lineage, itself=dict(self.pending_record.itself))
-        self.collection = self.parent.collection
         self.collection_id = self.parent.collection_id
         # attach self to parent
         self.parent.sub_record_keepers.append(self)
@@ -261,7 +260,8 @@ class RecordKeeper():
 
     def commit(self,*, additional_info=None):
         # finalize the record
-        (additional_info is not None) and self.pending_record.update(additional_info)
+        if isinstance(additional_info, dict): 
+            self.pending_record.update(additional_info)
         # make sure the ancestors are the most up-to-date (swap_out can cause them to change since init)
         local_lineage = self.local_data_lineage
         self.pending_record.ancestors = local_lineage
@@ -372,8 +372,8 @@ class RecordKeeper():
         large_pickle_save(path, self)
 
 class Experiment(object):
-    def __init__(self, experiment_info_keeper, save_experiment):
-        self.current_experiment = experiment_info_keeper
+    def __init__(self, internal_experiment_info, save_experiment):
+        self.current_experiment = internal_experiment_info
         self.save_experiment    = save_experiment
     
     def __enter__(self):
@@ -387,14 +387,7 @@ class ExperimentCollection:
     Example:
         collection = ExperimentCollection("test1") # filepath 
         with collection.new_experiment() as record_keeper:
-            model1 = record_keeper.sub_record_keeper(model="model1")
-            model2 = record_keeper.sub_record_keeper(model="model2")
-            model_1_losses = model1.sub_record_keeper(training=True)
-            from random import random, sample, choices
-            for each in range(1000):
-                model_1_losses.pending_record["index"] = each
-                model_1_losses.pending_record["loss_1"] = random()
-                model_1_losses.commit()
+            pass
     Note:
         the top most record keeper will be automatically be given these values:
         (all of these can be overridden)
@@ -413,8 +406,8 @@ class ExperimentCollection:
         self.quiet                               = quiet
         self.id                                  = None # will be changed almost immediately
         self.collection_name                     = FS.name(self.folder_path)
-        self._records                            = records or []
-        self._new_records                        = records
+        self._records                            = None
+        self._new_records                        = records or []
         self.collection_keeper                   = RecordKeeper({})
         self.internal_experiment_info            = None
         self.current_experiment                  = None
@@ -437,7 +430,7 @@ class ExperimentCollection:
         else:
             if not self.quiet: print(f'Will create new experiment collection: {self.collection_name}')
             self.id = f"{random()}"
-            FS.write(data=self.id, to=self.sub_paths.id):
+            FS.write(data=self.id, to=self.sub_paths.id)
         # when a record_keeper is saved, it shouldn't contain a copy of the experiment collection
         # (otherwise every record keeper would contain the entire collection instead of being Independent)
         # however, when record_keeper loads itself back, it should reconnect to the experiment_collection if its available
@@ -446,12 +439,8 @@ class ExperimentCollection:
         register = globals()["_ExperimentCollection_register"] = globals().get("_ExperimentCollection_register", {})
         register[self.id] = self
         
-        
-        #
         # attach the root RecordKeeper to the collection (makes the RecordKeeper kind of special)
-        #
-        self.collection_keeper.collection = self
-        self.collection_keeper.collection_id = self.folder_path
+        self.collection_keeper.collection_id = self.id
         
         self.load_basic_info()
     
@@ -462,7 +451,7 @@ class ExperimentCollection:
         
     def load_records(self):
         if FS.is_file(self.sub_paths.records):
-            self._records = large_pickle_load(self.sub_paths.records)
+            self._records = large_pickle_load(self.sub_paths.records) or []
         else:
             self._records = []
     
@@ -508,12 +497,13 @@ class ExperimentCollection:
         if not self.quiet: print(f"Saving {len(records)} records")
         # save records
         large_pickle_save(records, self.sub_paths.records)
+        self._records = records
         self._new_records.clear() # remove out new records whenever they're saved to prevent .reload() from adding duplicates
-        if not self.quiet: print(f"experiment collection saved in : {relative_path}")
+        if not self.quiet: print(f"Experiment collection saved in: {relative_path}")
     
     def new_experiment(self, experiment_info=None, **kwargs):
         experiment_info = experiment_info if experiment_info else {}
-        experiment_info.merge(kwargs)
+        experiment_info.update(kwargs)
         # add basic data to the experiment
         # there are 3 levels:
         # - self.collection_keeper.local_data (root) => data about the collection
@@ -556,7 +546,7 @@ class ExperimentCollection:
                 raise error
         
         return Experiment(
-            experiment_info_keeper=self.current_experiment,
+            internal_experiment_info=self.current_experiment,
             save_experiment=save_experiment,
         )
     

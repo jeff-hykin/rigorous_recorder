@@ -4,50 +4,57 @@ from rigorous_recorder import RecordKeeper, ExperimentCollection
 from statistics import mean as average
 from random import random, sample, choices
 
-collection = ExperimentCollection("records/my_study") # <- this string is a filepath 
+collection = ExperimentCollection("data/my_study") # <- this string is a filepath 
+number_of_new_experiments = 1
 
-# automatically increments from the previous experiment number
-# data is saved to disk automatically, even when an error is thrown
-# running again (after error) won't double-increment the experiment number (same number until non-error run is achieved)
-with collection.new_experiment() as record_keeper:
-    model1 = record_keeper.sub_record_keeper(model="model1")
-    model2 = record_keeper.sub_record_keeper(model="model2")
-    # splits^ in two different ways (like siblings in a family tree)
+for _ in range(number_of_new_experiments):
     
-    # 
-    # training
-    # 
-    model_1_losses = model1.sub_record_keeper(training=True)
-    model_2_losses = model2.sub_record_keeper(training=True)
-    for each_index in range(1000):
-        # one approach
-        model_2_losses.add_record({
-            "index": each_index,
-            "loss": random(),
-        })
+    # at the end (even when an error is thrown), all data is saved to disk automatically
+    # experiment number increments based on the last saved-to-disk experiment number
+    # running again (after error) won't double-increment the experiment number (same number until non-error run is achieved)
+    with collection.new_experiment() as experiment_recorder:
+        # code below conceptually creates this:
+        # 
+        #                          experiment_recorder
+        #                           /              \
+        #               model1_recorder           model2_recorder
+        #                /        |                 |           \
+        # m1_train_recorder m1_test_recorder   m2_test_recorder m2_train_recorder
+        # 
+        model1_recorder = RecordKeeper(model="model1").set_parent(experiment_recorder)
+        model2_recorder = RecordKeeper(model="model2").set_parent(experiment_recorder)
         
-        # alternative approach (same outcome)
-        # - this way is very handy for adding data in one class method (loss func)
-        #   while calling commit_record in a different class method (update weights)
-        model_1_losses.pending_record["index"] = each_index
-        model_1_losses.pending_record["loss"] = random()
-        model_1_losses.commit_record()
-    # 
-    # testing
-    # 
-    model_1_evaluation = model1.sub_record_keeper(testing=True)
-    model_2_evaluation = model2.sub_record_keeper(testing=True)
-    for each_index in range(50):
-        # one method
-        model_2_evaluation.add_record({
-            "index": each_index,
-            "accuracy": random(),
-        })
-        
-        # alternative way (same outcome)
-        model_1_evaluation.pending_record["index"] = each_index
-        model_1_evaluation.pending_record["accuracy"] = random()
-        model_1_evaluation.commit_record()
+        # 
+        # training
+        # 
+        model1_train_recorder = RecordKeeper(training=True).set_parent(model1_recorder)
+        model2_train_recorder = RecordKeeper(training=True).set_parent(model2_recorder)
+        for each_index in range(2):
+            # one approach
+            model1_train_recorder.push(index=each_index, loss=random())
+            
+            # alternative approach (same outcome)
+            # - this way is very handy for adding data in one class method (loss func)
+            #   while calling commit_record in a different class method (update weights)
+            model2_train_recorder.add(index=each_index)
+            model2_train_recorder.add({ "loss": random() })
+            model2_train_recorder.commit()
+            
+        # 
+        # testing
+        # 
+        model1_test_recorder = RecordKeeper(testing=True).set_parent(model1_recorder)
+        model2_test_recorder = RecordKeeper(testing=True).set_parent(model2_recorder)
+        for each_index in range(5):
+            # one method
+            model1_test_recorder.push(
+                index=each_index,
+                accuracy=random(),
+            )
+            
+            # alternative way (same outcome)
+            model2_test_recorder.add(index=each_index, accuracy=random())
+            model2_test_recorder.commit()
 
 
 # 
@@ -57,13 +64,13 @@ with collection.new_experiment() as record_keeper:
 # 
 
 all_records = collection.records
-print(all_records[0]) # prints first record, which behaves just like a regular dictionary
+print("first record", all_records[0]) # behaves just like a regular dictionary
 
-# first 500 training records (from both models)
+# slice across both models (first 500 training records from both models)
 records_first_half_of_time = tuple(each for each in all_records if each["training"] and each["index"] < 500)
-# not a great example, but this wouldn't care if the loss was from model1 or model 2
+# average loss across both models
 first_half_average_loss = average(tuple(each["loss"] for each in records_first_half_of_time))
-# only for model 1
-model_1_first_half_loss = average(tuple(each["loss"] for each in records_first_half_of_time if each["model"] == "model1"))
-# only for model 2
-model_2_first_half_loss = average(tuple(each["loss"] for each in records_first_half_of_time if each["model"] == "model2"))
+# average only for model 1
+model1_first_half_loss = average(tuple(each["loss"] for each in records_first_half_of_time if each["model"] == "model1"))
+# average only for model 2
+model2_first_half_loss = average(tuple(each["loss"] for each in records_first_half_of_time if each["model"] == "model2"))
