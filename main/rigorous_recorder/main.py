@@ -1,7 +1,7 @@
 from time import time as now
 
-from super_hash import super_hash
-from super_map import Map, LazyDict
+from rigorous_recorder.super_hash.main.super_hash import super_hash
+from rigorous_recorder.super_map.main.super_map import Map, LazyDict
 
 # TODO:
     # change the RecordKeeper file_path to an ID, and have the collection use an ID
@@ -195,7 +195,7 @@ class RecordKeeper():
         # attach self to parent
         self.parent.sub_record_keepers.append(self)
         self.collection = self.parent.collection
-        self.collection_id  = self.parent.file_path
+        self.collection_id  = self.parent.collection_id
         
         return self
     
