@@ -185,9 +185,9 @@ class RecordKeeper():
         
         self.local_data.update(kwargs)
         
-        # these will be set menually when theyre used
+        # these will be set menually when they are used
         self.collection = None
-        self.file_path  = None
+        self.collection_id = None
     
     def set_parent(self, parent):
         self.parent = parent
@@ -195,7 +195,7 @@ class RecordKeeper():
         # attach self to parent
         self.parent.sub_record_keepers.append(self)
         self.collection = self.parent.collection
-        self.file_path  = self.parent.file_path
+        self.collection_id  = self.parent.file_path
         
         return self
     
@@ -344,18 +344,18 @@ class RecordKeeper():
         return self.local_data.values(*args, **kwargs)
     
     def __getstate__(self):
-        return (self.parent, self.local_data, self.file_path, self.sub_record_keepers, self.pending_record, self.local_records)
+        return (self.parent, self.local_data, self.collection_id, self.sub_record_keepers, self.pending_record, self.local_records)
     
     def __setstate__(self, state):
-        self.parent, self.local_data, self.file_path, self.sub_record_keepers, self.pending_record, self.local_records = state
+        self.parent, self.local_data, self.collection_id, self.sub_record_keepers, self.pending_record, self.local_records = state
         # collection can't be saved because then each record keeper would have link to all other record keepers, not just sub_record_keepers
         # so its loaded based on the file path
         self.collection = None
-        if self.file_path is not None:
+        if self.collection_id is not None:
             # collection corrisponding to the file path, if it exists
             # this is global var because of python pickling
             # this re-attaches self.collection to the collection (which avoids pickling/unpickling the whole collection)
-            self.collection = globals().get("_ExperimentCollection_register",{}).get(self.file_path, None)
+            self.collection = globals().get("_ExperimentCollection_register",{}).get(self.collection_id, None)
             # TODO: there should be a requect for nanyak reconnection  if this fails
 
 class Experiment(object):
@@ -404,7 +404,7 @@ class ExperimentCollection:
         self.collection_keeper            = RecordKeeper({})
         # attache the collection_keeper to the collection (making it kind of special)
         self.collection_keeper.collection = self
-        self.collection_keeper.file_path  = self.file_path
+        self.collection_keeper.collection_id  = self.file_path
         
         import os
         self.file_path = os.path.abspath(self.file_path)
