@@ -1,10 +1,12 @@
 from time import time as now
+from random import random
 
+import rigorous_recorder.file_system_py.main.file_system_py as FS
 from rigorous_recorder.super_hash.main.super_hash import super_hash
 from rigorous_recorder.super_map.main.super_map import Map, LazyDict
 
 # TODO:
-    # change the RecordKeeper file_path to an ID, and have the collection use an ID
+    # have each experiment be given their own pickle file
 
 # 
 # helpers
@@ -160,6 +162,10 @@ class AncestorDict(dict):
         return self.compressed
 
 class RecordKeeper():
+    @classmethod
+    def load_from(self, path):
+        return large_pickle_load(path)
+    
     def __init__(self, *args, **kwargs):
         """
         Examples:
@@ -174,6 +180,8 @@ class RecordKeeper():
         self.local_records      = []
         self.parent             = None
         self.pending_record     = AncestorDict(ancestors=tuple()) 
+        self.collection_id      = None
+        self._collection        = None
         
         # load local data
         if len(args) == 1:
@@ -185,17 +193,13 @@ class RecordKeeper():
         
         self.local_data.update(kwargs)
         
-        # these will be set menually when they are used
-        self.collection = None
-        self.collection_id = None
-    
     def set_parent(self, parent):
         self.parent = parent
         self.pending_record = AncestorDict(ancestors=self.local_data_lineage, itself=dict(self.pending_record.itself))
+        self.collection = self.parent.collection
+        self.collection_id = self.parent.collection_id
         # attach self to parent
         self.parent.sub_record_keepers.append(self)
-        self.collection = self.parent.collection
-        self.collection_id  = self.parent.collection_id
         
         return self
     
@@ -205,6 +209,21 @@ class RecordKeeper():
         while isinstance(next_keeper.parent, RecordKeeper):
             yield next_keeper.parent.local_data
             next_keeper = next_keeper.parent
+    
+    @property
+    def collection(self):
+        if self._collection:
+            return self._collection
+        
+        if self.collection_id is not None:
+            # collection corrisponding to the file path, if it exists
+            # this is global var because of python pickling
+            # this re-attaches self.collection to the collection (which avoids pickling/unpickling the whole collection)
+            self._collection = globals().get("_ExperimentCollection_register",{}).get(self.collection_id, None)
+            
+            # TODO: if self._collection is still None, this should probably issue a warning
+        
+        return self._collection
     
     @property
     def local_data_lineage(self):
@@ -348,23 +367,17 @@ class RecordKeeper():
     
     def __setstate__(self, state):
         self.parent, self.local_data, self.collection_id, self.sub_record_keepers, self.pending_record, self.local_records = state
-        # collection can't be saved because then each record keeper would have link to all other record keepers, not just sub_record_keepers
-        # so its loaded based on the file path
-        self.collection = None
-        if self.collection_id is not None:
-            # collection corrisponding to the file path, if it exists
-            # this is global var because of python pickling
-            # this re-attaches self.collection to the collection (which avoids pickling/unpickling the whole collection)
-            self.collection = globals().get("_ExperimentCollection_register",{}).get(self.collection_id, None)
-            # TODO: there should be a requect for nanyak reconnection  if this fails
+
+    def save_to(self, path):
+        large_pickle_save(path, self)
 
 class Experiment(object):
     def __init__(self, experiment_info_keeper, save_experiment):
-        self.experiment_info_keeper = experiment_info_keeper
-        self.save_experiment        = save_experiment
+        self.current_experiment = experiment_info_keeper
+        self.save_experiment    = save_experiment
     
     def __enter__(self):
-        return self.experiment_info_keeper
+        return self.current_experiment
     
     def __exit__(self, _, error, traceback):
         self.save_experiment(_, error, traceback)
@@ -384,6 +397,7 @@ class ExperimentCollection:
                 model_1_losses.commit()
     Note:
         the top most record keeper will be automatically be given these values:
+        (all of these can be overridden)
         - experiment_number
         - error_number
         - had_error
@@ -394,136 +408,158 @@ class ExperimentCollection:
     
     # TODO: make it so that Experiments uses database with detached/reattached pickled objects instead of a single pickle file
     
-    def __init__(self, file_path, records=None, extension=".pickle"):
-        self.file_path                    = file_path+extension
-        self.collection_name              = ""
-        self.experiment_info_keeper       = None
-        self.experiment_keeper            = None
-        self.prev_experiment_local_data   = None
-        self._records                     = records or []
-        self.collection_keeper            = RecordKeeper({})
-        # attache the collection_keeper to the collection (making it kind of special)
-        self.collection_keeper.collection = self
-        self.collection_keeper.collection_id  = self.file_path
+    def __init__(self, folder_path, quiet=False, records=None, extension=".collection"):
+        self.folder_path                         = FS.make_absolute_path(folder_path+extension)
+        self.quiet                               = quiet
+        self.id                                  = None # will be changed almost immediately
+        self.collection_name                     = FS.name(self.folder_path)
+        self._records                            = records or []
+        self._new_records                        = records
+        self.collection_keeper                   = RecordKeeper({})
+        self.internal_experiment_info            = None
+        self.current_experiment                  = None
+        self.prev_internal_experiment_local_data = dict(experiment_number=0, error_number=0, had_error=False)
         
-        import os
-        self.file_path = os.path.abspath(self.file_path)
-        self.collection_name = os.path.basename(self.file_path)[0:-len(extension)]
-    
-    def load(self):
-        # 
-        # load from file
-        # 
-        import os
+        self.sub_paths = LazyDict(
+            id=f"{self.folder_path}/collection_id.txt",
+            collection_info=f"{self.folder_path}/collection_info.pickle",
+            records=f"{self.folder_path}/records.pickle",
+        )
         
-        # when a record_keeper is seralized, it shouldn't contain a copy of the experiment collection and every single record
-        # it really just needs its parents/children
-        # however, it still needs a refernce to the experiment_collection to get access to all the records
-        # so this register is used as a way for it to reconnect, based on the file_path of the collection
-        # NOTE: this could cause problems when moving the collection
-        # TODO: look into the "dill" package as a possible alternative, or just create a
+        # create the main folder if it doesn't exist
+        FS.ensure_is_folder(self.folder_path)
+        
+        # 
+        # load/set self.id
+        # 
+        if FS.is_file(self.sub_paths.id):
+            self.id = FS.read(self.sub_paths.id)
+        else:
+            if not self.quiet: print(f'Will create new experiment collection: {self.collection_name}')
+            self.id = f"{random()}"
+            FS.write(data=self.id, to=self.sub_paths.id):
+        # when a record_keeper is saved, it shouldn't contain a copy of the experiment collection
+        # (otherwise every record keeper would contain the entire collection instead of being Independent)
+        # however, when record_keeper loads itself back, it should reconnect to the experiment_collection if its available
+        # and thats exactly what this method here is doing
+        # TODO: look into the "dill" package as a possible alternative
         register = globals()["_ExperimentCollection_register"] = globals().get("_ExperimentCollection_register", {})
-        register[self.file_path] = self
+        register[self.id] = self
         
-        self.prev_experiment_local_data = self.prev_experiment_local_data or dict(experiment_number=0, error_number=0, had_error=False)
-        if not self._records and self.file_path:
-            if os.path.isfile(self.file_path):
-                self.collection_keeper.local_data, self.prev_experiment_local_data, self._records = large_pickle_load(self.file_path)
-            else:
-                print(f'Will create new experiment collection: {self.collection_name}')
+        
+        #
+        # attach the root RecordKeeper to the collection (makes the RecordKeeper kind of special)
+        #
+        self.collection_keeper.collection = self
+        self.collection_keeper.collection_id = self.folder_path
+        
+        self.load_basic_info()
     
-    def ensure_loaded(self):
-        if self.prev_experiment_local_data == None:
-            self.load()
+    def load_basic_info(self):
+        self.prev_internal_experiment_local_data = self.prev_internal_experiment_local_data or dict(experiment_number=0, error_number=0, had_error=False)
+        if FS.is_file(self.sub_paths.collection_info):
+            self.collection_keeper.local_data, self.prev_internal_experiment_local_data = large_pickle_load(self.sub_paths.collection_info)
+        
+    def load_records(self):
+        if FS.is_file(self.sub_paths.records):
+            self._records = large_pickle_load(self.sub_paths.records)
+        else:
+            self._records = []
+    
+    def reload(self):
+        self.load_basic_info()
+        self._records = None # records will do an on-demand reload because it can be a really slow operation
+        
+    @property
+    def records(self):
+        if self._records is None:
+            self.load_records()
+        return self._records + self._new_records
+    
+    def __len__(self,):
+        return len(self.records)
+    
+    def add_record(self, record):
+        self._new_records.append(record)
     
     @property
     def experiment_numbers(self):
         experiment_numbers = set()
+        # must manually calculate because experiments can be deleted
         for each in self.records:
             experiment_numbers.add(each.get("experiment_number", None))
         return tuple(experiment_numbers)
         
     def __getitem__(self, key):
-        self.ensure_loaded()
         experiment_numbers = self.experiment_numbers
         if key < 0:
             key = experiment_numbers[key]
         if key not in experiment_numbers:
             return []
-        return tuple(each for each in self._records if each.get("experiment_number",None) == key)
+        return tuple(each for each in self.records if each.get("experiment_number",None) == key)
     
-    def add_record(self, record):
-        self.ensure_loaded()
-        self._records.append(record)
+    def save(self):
+        relative_path = FS.make_relative_path(to=self.folder_path)
+        if not self.quiet: print(f"Saving experiment: {self.internal_experiment_info.local_data}")
+        FS.ensure_is_folder(self.folder_path)
+        # save basic collection info
+        large_pickle_save((self.collection_keeper.local_data, self.internal_experiment_info.local_data), self.sub_paths.collection_info)
+        records = self.records
+        if not self.quiet: print(f"Saving {len(records)} records")
+        # save records
+        large_pickle_save(records, self.sub_paths.records)
+        self._new_records.clear() # remove out new records whenever they're saved to prevent .reload() from adding duplicates
+        if not self.quiet: print(f"experiment collection saved in : {relative_path}")
     
-    def new_experiment(self, **experiment_info):
-        # 
-        # load from file
-        # 
-        self.ensure_loaded()
-        
+    def new_experiment(self, experiment_info=None, **kwargs):
+        experiment_info = experiment_info if experiment_info else {}
+        experiment_info.merge(kwargs)
         # add basic data to the experiment
         # there are 3 levels:
-        # - self.collection_keeper.local_data (root)
-        # - self.experiment_keeper
-        # - self.experiment_info_keeper
-        self.experiment_keeper = self.collection_keeper.sub_record_keeper(
-            experiment_number=self.prev_experiment_local_data["experiment_number"] + 1 if not self.prev_experiment_local_data["had_error"] else self.prev_experiment_local_data["experiment_number"],
-            error_number=self.prev_experiment_local_data["error_number"]+1,
-            had_error=True,
+        # - self.collection_keeper.local_data (root) => data about the collection
+        # - self.internal_experiment_info            => automated data about the experiment
+        # - self.current_experiment                  => user-data about the experiment
+        self.internal_experiment_info = RecordKeeper(
+            experiment_number=self.prev_internal_experiment_local_data["experiment_number"] + 1 if not self.prev_internal_experiment_local_data["had_error"] else self.prev_internal_experiment_local_data["experiment_number"],
+            error_number=self.prev_internal_experiment_local_data["error_number"]+1,
+            had_error=True, # default assumption => is later set to False (if it succeeds)
             experiment_start_time=now(),
-        )
-        # create experiment record keeper
-        if len(experiment_info) == 0:
-            self.experiment_info_keeper = self.experiment_keeper
-        else:
-            self.experiment_info_keeper = self.experiment_keeper.sub_record_keeper(**experiment_info)
+        ).set_parent(self.collection_keeper)
+        
+        self.current_experiment = RecordKeeper(experiment_info).set_parent(self.internal_experiment_info)
         
         def save_experiment(_, error, traceback):
-            # mutate the root one based on having an error or not
+            # mutate the internal experiment record keeper based on having an error or not
             no_error = error is None
-            experiment_info = self.experiment_keeper.local_data
+            experiment_info = self.internal_experiment_info.local_data
             experiment_info["experiment_end_time"] = now()
             experiment_info["experiment_duration"] = experiment_info["experiment_end_time"] - experiment_info["experiment_start_time"]
             if no_error:
                 experiment_info["had_error"] = False
                 experiment_info["error_number"] = 0
             
+            # save to storage
+            self.save()
             
-            # 
-            # save to file
-            # 
-            # ensure folder exists
-            import os;os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
-            self.prev_experiment_local_data = self.experiment_keeper.local_data
-            data = (self.collection_keeper.local_data, self.experiment_keeper.local_data, self._records)
-            # update self encase multiple experiments are run without re-reading the file
-            print("Saving "+str(len(self._records))+" records")
-            large_pickle_save(data, self.file_path)
-            print("Records saved to: " + self.file_path)
+            # "this" experiment has now become "previous" experiment
+            self.prev_internal_experiment_local_data = self.internal_experiment_info.local_data
             
-            # re-throw the error
+            # re-throw if error occured
             if not no_error:
                 print(f'There was an error when running an experiment. Experiment collection: "{self.collection_name}"')
                 print(f'However, the partial experiment data was saved')
-                experiment_number = self.experiment_keeper.local_data["experiment_number"]
-                error_number = self.experiment_keeper.local_data["error_number"]
+                experiment_number = self.internal_experiment_info.local_data["experiment_number"]
+                error_number = self.internal_experiment_info.local_data["error_number"]
                 import traceback
                 print(f'This happend on:\n    dict(experiment_number={experiment_number}, error_number={error_number})')
                 print(traceback.format_exc())
                 raise error
         
         return Experiment(
-            experiment_info_keeper=self.experiment_info_keeper,
-            save_experiment=save_experiment
+            experiment_info_keeper=self.current_experiment,
+            save_experiment=save_experiment,
         )
     
-    def __len__(self,):
-        self.ensure_loaded()
-        return len(self._records)
     
-    @property
-    def records(self):
-        self.ensure_loaded()
-        return self._records
+    
     
