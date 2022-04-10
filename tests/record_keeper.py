@@ -11,5 +11,5 @@ episode_keeper.push(x=1, y=1) # timestep1
 episode_keeper.push(x=2, y=2) # timestep2
 episode_keeper.push(x=3, y=3) # timestep3
 
-episode_keeper.add(accuracy=random(), index=1)
+episode_keeper.add(accuracy=random(), index=each_index)
 episode_keeper.commit()
