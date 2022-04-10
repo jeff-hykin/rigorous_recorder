@@ -58,7 +58,7 @@ class AncestorDict(dict):
         self.ancestors = ancestors
         if not isinstance(self.ancestors, (list, tuple)):
             raise Exception('for AncestorDict(), ancestors needs to be a dict')
-        if itself != None and type(self.itself) != dict:
+        if itself != None and type(itself) != dict:
             raise Exception('for AncestorDict(), itself needs to be a pure dict')
         self.itself = itself or {}
     
