@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from rigorous_recorder import RecordKeeper
+from random import random, sample, choices
 keeper = RecordKeeper()
 
 # parent data
@@ -10,5 +11,5 @@ episode_keeper.push(x=1, y=1) # timestep1
 episode_keeper.push(x=2, y=2) # timestep2
 episode_keeper.push(x=3, y=3) # timestep3
 
-model_1_evaluation.add(accuracy=random(), index=each_index)
-model_1_evaluation.commit()
+episode_keeper.add(accuracy=random(), index=1)
+episode_keeper.commit()
