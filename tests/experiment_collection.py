@@ -13,7 +13,7 @@ for _ in range(number_of_new_experiments):
     # experiment number increments based on the last saved-to-disk experiment number
     # running again (after error) won't double-increment the experiment number (same number until non-error run is achieved)
     with collection.new_experiment() as experiment_recorder:
-        # code below conceptually creates this:
+        # we can create a hierarchy like this:
         # 
         #                          experiment_recorder
         #                           /              \
@@ -29,14 +29,14 @@ for _ in range(number_of_new_experiments):
         # 
         model1_train_recorder = RecordKeeper(training=True).set_parent(model1_recorder)
         model2_train_recorder = RecordKeeper(training=True).set_parent(model2_recorder)
-        for each_index in range(2):
+        for each_index in range(10_000):
             # one approach
             model1_train_recorder.push(index=each_index, loss=random())
             
             # alternative approach (same outcome)
-            # - this way is very handy for adding data in one class method (loss func)
-            #   while calling commit_record in a different class method (update weights)
             model2_train_recorder.add(index=each_index)
+            # - this way is very handy for adding data in one method (like a loss func)
+            #   while calling .commit() in a different method (like update weights)
             model2_train_recorder.add({ "loss": random() })
             model2_train_recorder.commit()
             
@@ -45,7 +45,7 @@ for _ in range(number_of_new_experiments):
         # 
         model1_test_recorder = RecordKeeper(testing=True).set_parent(model1_recorder)
         model2_test_recorder = RecordKeeper(testing=True).set_parent(model2_recorder)
-        for each_index in range(5):
+        for each_index in range(500):
             # one method
             model1_test_recorder.push(
                 index=each_index,

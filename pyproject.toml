@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rigorous_recorder"
-version = "0.0.2"
+version = "1.0.0"
 description = "Save everything in a filterable way"
 authors=[]
 
@@ -13,8 +13,8 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = ">=3.7,<3.12"
 pip = "20.1.1"
-super-hash = "^1.0.5"
-super-map = "^1.2.1"
+simple-namespace = "^1.0.0"
+python-include = "^2.0.0"
 
 [tool.poetry.dev-dependencies]
 twine = "3.4.1"

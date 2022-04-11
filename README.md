@@ -13,7 +13,7 @@ Lets say you're going to perform
 - 3 experiments
 - each experiment has 10 episodes
 - each episode has 100,000 timesteps
-- there is an an `x` and `y` value at each timestep <br>
+- there is an an `x` and a `y` value at each timestep <br>
 
 #### Example goal:
 - We want to get the average `x` value across all timesteps in episode 2 (we don't care what experiment they're from)
@@ -27,7 +27,7 @@ record3 = { "x":3, "y":3 } # third timestep
 ```
 
 #### Problem
-Those records don't contain the experiment number or the episode number (and we need one of those for our goal)
+Those records don't contain the experiment number or the episode number (and we need those for our goal)
 
 #### Bad Solution
 
@@ -52,23 +52,25 @@ record2 = { "x":2, "y":2, "parents": [experiment_data, episode_data] } # second 
 record3 = { "x":3, "y":3, "parents": [experiment_data, episode_data] } # third timestep
 ```
 
-#### How does Rigorous Recorder help?
+#### How does Rigorous Recorder Fix This?
 
-The "Good-ish Solution" above is still very crude, this library cleans it up.
+The "Good-ish Solution" above is still crude, this library cleans it up, and does it without storing a list of parents.
 1. The `RecordKeeper` class in this library is the core/pure data structure
 2. The `ExperimentCollection` class automates common boilerplate for saving (python pickle), catching errors, managing experiments, etc
 
 ```python
 from rigorous_recorder import RecordKeeper
-keeper = RecordKeeper()
+recorder = RecordKeeper()
 
 # parent data
-experiment_keeper = RecordKeeper(experiment=1).set_parent(keeper)
-episode_keeper    = RecordKeeper(episode=1).set_parent(experiment_keeper)
+experiment_recorder = RecordKeeper(experiment=1).set_parent(recorder)
+episode_recorder    = RecordKeeper(episode=1).set_parent(experiment_recorder)
 
-episode_keeper.push(x=1, y=1) # timestep1
-episode_keeper.push(x=2, y=2) # timestep2
-episode_keeper.push(x=3, y=3) # timestep3
+episode_recorder.push(x=1, y=1) # timestep1
+episode_recorder.push(x=2, y=2) # timestep2
+episode_recorder.push(x=3, y=3) # timestep3
+
+recorder.save_to("where/ever/you_want.pickle")
 ```
 
 # How do I use this?
@@ -90,7 +92,7 @@ for _ in range(number_of_new_experiments):
     # experiment number increments based on the last saved-to-disk experiment number
     # running again (after error) won't double-increment the experiment number (same number until non-error run is achieved)
     with collection.new_experiment() as experiment_recorder:
-        # code below conceptually creates this:
+        # we can create a hierarchy like this:
         # 
         #                          experiment_recorder
         #                           /              \
@@ -106,14 +108,14 @@ for _ in range(number_of_new_experiments):
         # 
         model1_train_recorder = RecordKeeper(training=True).set_parent(model1_recorder)
         model2_train_recorder = RecordKeeper(training=True).set_parent(model2_recorder)
-        for each_index in range(2):
+        for each_index in range(100_000):
             # one approach
             model1_train_recorder.push(index=each_index, loss=random())
             
             # alternative approach (same outcome)
-            # - this way is very handy for adding data in one class method (loss func)
-            #   while calling commit_record in a different class method (update weights)
             model2_train_recorder.add(index=each_index)
+            # - this way is very handy for adding data in one method (like a loss func)
+            #   while calling .commit() in a different method (like update weights)
             model2_train_recorder.add({ "loss": random() })
             model2_train_recorder.commit()
             
@@ -122,7 +124,7 @@ for _ in range(number_of_new_experiments):
         # 
         model1_test_recorder = RecordKeeper(testing=True).set_parent(model1_recorder)
         model2_test_recorder = RecordKeeper(testing=True).set_parent(model2_recorder)
-        for each_index in range(5):
+        for each_index in range(500):
             # one method
             model1_test_recorder.push(
                 index=each_index,

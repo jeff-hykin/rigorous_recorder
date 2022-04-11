@@ -1,9 +1,15 @@
 from time import time as now
 from random import random
 
-import rigorous_recorder.file_system_py.main.file_system_py as FS
-from rigorous_recorder.super_hash.main.super_hash import super_hash
-from rigorous_recorder.super_map.main.super_map import Map, LazyDict
+import python_include
+
+FS         = python_include.file("./file_system_py/main/file_system_py/main.py", {"__file__": __file__})
+super_hash = python_include.file("./super_hash/main/super_hash/main.py"        , {"__file__": __file__}).super_hash
+LazyDict   = python_include.file("./super_map/main/super_map/main.py"          , {"__file__": __file__}).LazyDict
+
+# import rigorous_recorder.file_system_py.main.file_system_py.main as FS
+# from rigorous_recorder.super_hash.main.super_hash.main import super_hash
+# from rigorous_recorder.super_map.main.super_map.main import Map, LazyDict
 
 # TODO:
     # have each experiment be given their own pickle file
@@ -369,7 +375,7 @@ class RecordKeeper():
         self.parent, self.local_data, self.collection_id, self.sub_record_keepers, self.pending_record, self.local_records = state
 
     def save_to(self, path):
-        large_pickle_save(path, self)
+        large_pickle_save(self, path)
 
 class Experiment(object):
     def __init__(self, internal_experiment_info, save_experiment):
