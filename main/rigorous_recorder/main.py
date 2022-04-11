@@ -2,9 +2,9 @@ from time import time as now
 from random import random
 
 import python_include
+import file_system_py as FS
 from super_map import LazyDict
-FS         = python_include.file("./file_system_py/main/file_system_py/main.py", {"__file__": __file__})
-super_hash = python_include.file("./super_hash/main/super_hash/main.py"        , {"__file__": __file__}).super_hash
+from super_hash import super_hash
 
 # TODO:
     # have each experiment be given their own pickle file

@@ -27,8 +27,8 @@ setuptools.setup(
     packages=[package_info["name"]],
     install_requires=[
         "simple-namespace >= 1.0.0",
-        "python-include >= 2.0.0",
         "super-map >= 1.2.1",
+        "super-hash >= 1.0.5",
     ],
     classifiers=[
         # examples:
