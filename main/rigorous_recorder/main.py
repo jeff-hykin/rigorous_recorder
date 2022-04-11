@@ -36,6 +36,7 @@ def large_pickle_save(variable, file_path):
     import pickle
     bytes_out = pickle.dumps(variable, protocol=4)
     max_bytes = 2**31 - 1
+    FS.clear_a_path_for(file_path, overwrite=True)
     with open(file_path, 'wb') as f_out:
         for idx in range(0, len(bytes_out), max_bytes):
             f_out.write(bytes_out[idx:idx+max_bytes])
@@ -135,10 +136,8 @@ class AncestorDict(dict):
         return copy
     
     def __repr__(self,):
-        copy = self.compressed
-        import json
-        representer = attempt(lambda: json.dumps(self, indent=4), default=copy.__repr__())
-        return representer
+        copy = LazyDict(self.compressed)
+        return copy.__repr__()
     
     def get(self,*args,**kwargs):
         return self.compressed.get(*args,**kwargs)
@@ -160,6 +159,309 @@ class AncestorDict(dict):
     
     def __json__(self):
         return self.compressed
+
+class AncestorMask(dict):
+    def __init__(self, *, ancestors, index, frame):
+        self.ancestors = ancestors
+        if not isinstance(self.ancestors, (list, tuple)):
+            raise Exception('for AncestorDict(), ancestors needs to be a dict')
+        if type(frame) != dict:
+            raise Exception('for AncestorDict(), frame needs to be a pure dict')
+        self.frame = frame
+        self.index = index
+    
+    @property
+    def itself(self):
+        value = {}
+        frame = self.frame
+        index = self.index
+        for each_key, each_value in frame.items():
+            value[each_key] = frame[each_key][index]
+        return value
+    
+    @property
+    def lineage(self):
+        yield self.itself
+        for each in self.ancestors:
+            yield each
+    
+    def keys(self):
+        self_keys = self.frame.keys()
+        for each_key in self_keys:
+            if each_key is not None:
+                yield each_key
+        self_keys = set(self_keys)
+        for each_parent in self.ancestors:
+            for each_key in each_parent.keys():
+                if each_key not in self_keys:
+                    self_keys.add(each_key)
+                    yield each_key
+    
+    def values(self):
+        self_keys = self.frame.keys()
+        for each_key, each_value in self.itself.items():
+            if each_key is not None:
+                yield each_value
+        self_keys = set(self_keys)
+        for each_parent in self.ancestors:
+            for each_key, each_value in each_parent.items():
+                if each_key not in self_keys:
+                    self_keys.add(each_key)
+                    yield each_value
+    
+    def items(self):
+        self_keys = self.frame.keys()
+        for each_key, each_value in self.itself.items():
+            if each_key is not None:
+                yield (each_key, each_value)
+        self_keys = set(self_keys)
+        for each_parent in self.ancestors:
+            for each_key, each_value in each_parent.items():
+                if each_key not in self_keys:
+                    self_keys.add(each_key)
+                    yield (each_key, each_value)
+    
+    def __len__(self):
+        return len(tuple(self.keys()))
+    
+    def __iter__(self):
+        return (each for each in self.keys())
+    
+    def __contains__(self, key):
+        return any((key in each_person.keys() for each_person in self.lineage))
+        
+    def __getitem__(self, key):
+        for each_person in self.lineage:
+            if key in each_person.keys():
+                return each_person[key]
+        return None
+    
+    def __setitem__(self, key, value):
+        # if adding a new key
+        if key not in self.frame:
+            first_key = next(self.frame.keys().__iter__())
+            number_of_records = len(self.frame[first_key])
+            self.frame[key] = [None]*number_of_records
+        
+        self.frame[key][self.index] = value
+
+    def update(self, other):
+        # use the __setitem__ over and over again
+        for each_key, each_value in other.items():
+            self[each_key] = each_value
+    
+    @property
+    def compressed(self):
+        copy = {}
+        for each in reversed(tuple(self.lineage)):
+            copy.update(each)
+        del copy[None]
+        return copy
+    
+    def __repr__(self,):
+        copy = LazyDict(self.compressed)
+        return copy.__repr__()
+    
+    def get(self,*args,**kwargs):
+        return self.compressed.get(*args,**kwargs)
+    
+    def copy(self,*args,**kwargs):
+        return self.compressed.copy(*args,**kwargs)
+
+    def clone(self):
+        return AncestorDict(
+            ancestors=self.ancestors,
+            itself=dict(self.itself),
+        )
+    
+    def __getstate__(self):
+        return self.index, self.frame, self.ancestors
+    
+    def __setstate__(self, state):
+        self.index, self.frame, self.ancestors = state
+    
+    def __json__(self):
+        return self.compressed
+
+class Recorder():
+    @classmethod
+    def load_from(self, path):
+        return large_pickle_load(path)
+    
+    def __init__(self, data=None, **kwargs):
+        """
+        Examples:
+            RecordKeeper()
+            RecordKeeper({"key_of_data": "value"})
+            RecordKeeper(key_of_data="value)
+            RecordKeeper({}, parent_record_keeper)
+        """
+        # properties (each are updated below)
+        self.local_data     = LazyDict(data or {}).merge(kwargs)
+        self.sub_recorders  = []
+        self.length         = 0
+        self.frame          = {}
+        self.parent         = None
+        self.pending_record = {None:None}
+    
+    def set_parent(self, parent):
+        self.parent = parent
+        # attach self to parent
+        self.parent.sub_recorders.append(self)
+        return self
+    
+    def local_data_lineage_generator(self):
+        yield self.local_data
+        next_recorder = self
+        while isinstance(next_recorder.parent, RecordKeeper):
+            yield next_recorder.parent.local_data
+            next_recorder = next_recorder.parent
+    
+    @property
+    def local_data_lineage(self):
+        return tuple(self.local_data_lineage_generator())
+    
+    @property
+    def records(self):
+        for index in range(self.length):
+            yield AncestorMask(ancestors=self.local_data_lineage, index=index, frame=self.frame)
+    
+    @property
+    def all_records(self):
+        for each in self.records:
+            yield each
+        for each_sub_recorder in self.sub_recorders:
+            for each_record in each_sub_recorder.all_records:
+                yield each_record
+    
+    def push(self, data=None, **kwargs):
+        self.length += 1
+        pending_record = self.pending_record
+        pending_record.update(data or {})
+        pending_record.update(kwargs)
+        
+        frame = self.frame
+        # extend everything down by 1
+        for each_key, each_value in self.frame.items():
+            each_value.append(None)
+        # add the real new values
+        for each_key, each_value in pending_record.items():
+            if each_key not in frame:
+                frame[each_key] = [None]*self.length
+                frame[each_key][-1] = each_value
+            else:
+                frame[each_key][self.length-1] = each_value
+            
+        self.pending_record = {None:None}
+        return self
+
+    def add(self, data=None, **kwargs):
+        self.pending_record.update(data or {})
+        self.pending_record.update(kwargs)
+        return self
+
+    def commit(self):
+        return self.push()
+    
+    def swap_out(self, old_record_keeper, new_record_keeper):
+        next_keeper = self
+        while isinstance(next_keeper.parent, RecordKeeper):
+            if id(next_keeper.parent) == id(old_record_keeper):
+                next_keeper.parent = new_record_keeper
+                return True
+            # TODO: add infinte loop check (like if next_keeper.parent == next_keeper) 
+            next_keeper = next_keeper.parent
+    
+    def SubRecorder(self, **kwargs):
+        return Recorder(kwargs).set_parent(self)
+    
+    def __iter__(self):
+        return self.records
+    
+    def __len__(self):
+        return self.length
+    
+    def __hash__(self):
+        return super_hash({ Recorder: self.local_data })
+        
+    def __repr__(self):
+        size = len(self)
+        import json
+        # fallback case first
+        representer = attempt(lambda: indent(representer.__repr__()), default=self.local_data)
+        # ideal case
+        representer = attempt(lambda: indent(json.dumps(self.local_data, indent=4)), default=representer)
+        # parent data
+        all_parents = []
+        parent_data = "    {"
+        for each_key, each_value in self.parent.items():
+            parent_data += f'\n        "{each_key}":' + indent(
+                attempt(lambda: json.dumps(each_value, indent=4), default=f"{each_value}")
+            )
+        parent_data += "\n    }"
+        
+        return f"""{'{'}\n    number_of_records: {size},\n    records: [ ... ],\n    local_data: {representer},\n    parent_data:{parent_data}\n{'}'}"""
+    
+    def __getitem__(self, key):
+        # numerical acts like array of local records 
+        if isinstance(key, int):
+            return AncestorMask(ancestors=self.local_data_lineage, index=key, frame=self.frame)
+        elif isinstance(key, slice):
+            length = self.length
+            start = key.start or 0
+            stop = key.stop or length
+            step = key.step or 1
+            # negative indices
+            start = start if start > 0 else length - start
+            stop  = stop  if stop  > 0 else length - stop
+            
+            return tuple(
+                AncestorMask(ancestors=self.local_data_lineage, index=key, frame=self.frame)
+                    for index in range(start, stop, step)
+            )
+        # all else acts like dict of local data
+        else:
+            return self.local_data[key]
+    
+    def __setitem__(self, key, value):
+        # numerical acts like array of local records 
+        if isinstance(key, (int, slice)):
+            self.local_records[key] = value
+        # all else acts like dict of local data
+        else:
+            self.local_data[key] = value
+    
+    def get(self, key, default=None):
+        # numerical acts like array of local records 
+        if isinstance(key, (int, slice)):
+            try:
+                return self.local_records[key]
+            except Exception as error:
+                return default
+        # all else acts like dict of local data
+        else:
+            if key in self.local_data:
+                return self.local_data[key]
+            else:
+                return default
+    
+    def items(self, *args, **kwargs):
+        return self.local_data.items(*args, **kwargs)
+    
+    def keys(self, *args, **kwargs):
+        return self.local_data.keys(*args, **kwargs)
+    
+    def values(self, *args, **kwargs):
+        return self.local_data.values(*args, **kwargs)
+    
+    def __getstate__(self):
+        return (self.parent, self.local_data, self.sub_recorders, self.pending_record, self.frame, self.length)
+    
+    def __setstate__(self, state):
+        self.parent, self.local_data, self.sub_recorders, self.pending_record, self.frame, self.length = state
+
+    def save_to(self, path):
+        large_pickle_save(self, path)
 
 class RecordKeeper():
     @classmethod
@@ -241,10 +543,8 @@ class RecordKeeper():
                         yield each_record
             return generator()
     
-    def push(self, *args, **kwargs):
-        data = {}
-        if len(args) > 0:
-            data = args[0]
+    def push(self, data=None, **kwargs):
+        data = {} if data is None else data
         data.update(kwargs)
         self.commit(additional_info=data)
         return self
@@ -293,14 +593,14 @@ class RecordKeeper():
         return RecordKeeper(kwargs).set_parent(self)
     
     def __iter__(self):
-        return self.records()
+        return self.records
     
     def __len__(self):
         if self.collection is None:
             return len(self.local_records)
         else:
             # apparently this is the fastest way (no idea why converting to tuple is faster than using reduce)
-            return len(tuple(self.records()))
+            return len(tuple(self.records))
     
     def __hash__(self):
         return super_hash({ RecordKeeper: self.local_data })
@@ -369,7 +669,6 @@ class RecordKeeper():
         self.parent, self.local_data, self.collection_id, self.sub_record_keepers, self.pending_record, self.local_records = state
 
     def save_to(self, path):
-        FS.clear_a_path_for(path, overwrite=True)
         large_pickle_save(self, path)
 
 class Experiment(object):

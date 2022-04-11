@@ -45,26 +45,39 @@ We could use references to be both more efficient and allow adding parent data a
 ```python
 # parent data
 experiment_data = { "experiment": 1 }
-episode_data    = { "episode":1, }
+episode_data    = { "episode":1, "parent": experiment_data }
 
-record1 = { "x":1, "y":1, "parents": [experiment_data, episode_data] } # first timestep
-record2 = { "x":2, "y":2, "parents": [experiment_data, episode_data] } # second timestep
-record3 = { "x":3, "y":3, "parents": [experiment_data, episode_data] } # third timestep
+record1 = { "x":1, "y":1, "parent": episode_data } # first timestep
+record2 = { "x":2, "y":2, "parent": episode_data } # second timestep
+record3 = { "x":3, "y":3, "parent": episode_data } # third timestep
+```
+
+We could reduce the cost of key duplication by having shared keys
+
+```python
+# parent data
+experiment_data = { "experiment": 1 }
+episode_data    = { "episode":1, "parent": experiment_data }
+
+episode_keeper = {"parent": episode_data} # timestep 0
+episode_keeper = { "x":[1],     "y":[1],     "parent": episode_data} # first timestep (keys added on-demand)
+episode_keeper = { "x":[1,2],   "y":[1,2],   "parent": episode_data} # second timestep
+episode_keeper = { "x":[1,2,3], "y":[1,2,3], "parent": episode_data} # third timestep
 ```
 
 #### How does Rigorous Recorder Fix This?
 
-The "Good-ish Solution" above is still crude, this library cleans it up, and does it without storing a list of parents.
-1. The `RecordKeeper` class in this library is the core/pure data structure
+The "Good-ish Solution" above is still crude, this library cleans it up
+1. The `Recorder` class in this library is the core/pure data structure
 2. The `ExperimentCollection` class automates common boilerplate for saving (python pickle), catching errors, managing experiments, etc
 
 ```python
-from rigorous_recorder import RecordKeeper
-recorder = RecordKeeper()
+from rigorous_recorder import Recorder
+recorder = Recorder()
 
 # parent data
-experiment_recorder = RecordKeeper(experiment=1).set_parent(recorder)
-episode_recorder    = RecordKeeper(episode=1).set_parent(experiment_recorder)
+experiment_recorder = Recorder(experiment=1).set_parent(recorder)
+episode_recorder    = Recorder(episode=1).set_parent(experiment_recorder)
 
 episode_recorder.push(x=1, y=1) # timestep1
 episode_recorder.push(x=2, y=2) # timestep2

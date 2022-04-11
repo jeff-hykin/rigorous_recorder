@@ -14,4 +14,4 @@ episode_recorder.push(x=3, y=3) # timestep3
 episode_recorder.add(accuracy=random(), index=1)
 episode_recorder.commit()
 
-episode_recorder.save_to("data/episode_recorder.pickle")
+episode_recorder.save_to("data.ignore/episode_recorder.pickle")
