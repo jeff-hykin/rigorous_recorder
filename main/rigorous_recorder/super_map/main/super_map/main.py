@@ -305,4 +305,9 @@ class LazyDict(dict):
     def merge(self, other_dict):
         self.__dict__.update(other_dict)
         return self
-
+    
+    def __getstate__(self):
+        return self.__dict__.__getstate__
+    
+    def __setstate__(self, state):
+        self.__dict__.__setstate__(state)
