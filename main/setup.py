@@ -26,9 +26,9 @@ setuptools.setup(
     license=package_info["license"],
     packages=[package_info["name"]],
     install_requires=[
-        # examples:
-        # 'aiohttp >= 3.7.4',
-        # 'python-socketio >= 5.3.0',
+        "simple-namespace >= 1.0.0",
+        "python-include >= 2.0.0",
+        "super-map >= 1.2.1",
     ],
     classifiers=[
         # examples:
