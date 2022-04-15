@@ -459,6 +459,7 @@ class Recorder():
     
     def __setstate__(self, state):
         self.parent, self.local_data, self.sub_recorders, self.pending_record, self.frame, self.length = state
+        self._collection = None
 
     def save_to(self, path):
         large_pickle_save(self, path)
