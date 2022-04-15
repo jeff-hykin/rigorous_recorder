@@ -544,6 +544,14 @@ class RecordKeeper():
                         yield each_record
             return generator()
     
+    @property
+    def all_records(self):
+        for each in self.local_records:
+            yield each
+        for each_sub_record_keeper in self.sub_record_keepers:
+            for each_record in each_sub_record_keeper.all_records:
+                yield each_record
+    
     def push(self, data=None, **kwargs):
         data = {} if data is None else data
         data.update(kwargs)
