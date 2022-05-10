@@ -255,7 +255,8 @@ class AncestorMask(dict):
         copy = {}
         for each in reversed(tuple(self.lineage)):
             copy.update(each)
-        del copy[None]
+        if None in copy:
+            del copy[None]
         return copy
     
     def __repr__(self,):
@@ -334,6 +335,39 @@ class Recorder():
             for each_record in each_sub_recorder.all_records:
                 yield each_record
     
+    @property
+    def full(self):
+        if len(self.sub_recorders) == 0:
+            return self
+        
+        full_value = Recorder()
+        full_value.local_data     = self.local_data
+        full_value.parent         = self.parent
+        
+        # get all keys (recursive)
+        new_frame = { each_key: [] for each_key in self.keys() }
+        for each_sub_record_keeper in self.sub_recorders:
+            for each_key in each_sub_record_keeper.keys():
+                new_frame[each_key] = []
+            for each_key in each_sub_record_keeper.frame.keys():
+                new_frame[each_key] = []
+            for each_key in each_sub_record_keeper.full.frame.keys():
+                new_frame[each_key] = []
+        
+        # get all frames (recursive)
+        mock_self = LazyDict(full=self)
+        for each_sub_record_keeper in (mock_self, *self.sub_recorders):
+            length = each_sub_record_keeper.full.length
+            full_value.length += length
+            sub_frame = each_sub_record_keeper.full.frame
+            for each_key in new_frame.keys():
+                if each_key not in sub_frame:
+                    sub_frame[each_key] = [self.get(each_key, each_sub_record_keeper.get(each_key, None))]*length
+                # append all the new values
+                new_frame[each_key] += sub_frame[each_key]
+        full_value.frame = new_frame
+        return full_value
+    
     def push(self, data=None, **kwargs):
         self.length += 1
         pending_record = self.pending_record
@@ -394,10 +428,11 @@ class Recorder():
         # parent data
         all_parents = []
         parent_data = "    {"
-        for each_key, each_value in self.parent.items():
-            parent_data += f'\n        "{each_key}":' + indent(
-                attempt(lambda: json.dumps(each_value, indent=4), default=f"{each_value}")
-            )
+        if self.parent:
+            for each_key, each_value in self.parent.items():
+                parent_data += f'\n        "{each_key}":' + indent(
+                    attempt(lambda: json.dumps(each_value, indent=4), default=f"{each_value}")
+                )
         parent_data += "\n    }"
         
         return f"""{'{'}\n    number_of_records: {size},\n    records: [ ... ],\n    local_data: {representer},\n    parent_data:{parent_data}\n{'}'}"""
