@@ -1,5 +1,6 @@
 from time import time as now
 from random import random
+import json
 
 import file_system_py as FS
 from super_map import LazyDict
@@ -420,7 +421,6 @@ class Recorder():
         
     def __repr__(self):
         size = len(self)
-        import json
         # fallback case first
         representer = attempt(lambda: indent(representer.__repr__()), default=self.local_data)
         # ideal case
@@ -520,6 +520,7 @@ class RecordKeeper():
         self.pending_record     = AncestorDict(ancestors=tuple()) 
         self.collection_id      = None
         self._collection        = None
+        self._live_files        = []
         
         # load local data
         if len(args) == 1:
@@ -614,6 +615,11 @@ class RecordKeeper():
             self.collection.add_record(self.pending_record)
         else:
             self.local_records.append(self.pending_record)
+        
+        for each in self._live_files:
+            each.write("- "+json.dumps(self.pending_record.itself)+"\n")
+            each.flush()
+        
         # start a new clean record
         self.pending_record = AncestorDict(ancestors=local_lineage)
         # return the record (AncestorDict) that was just committed
@@ -651,7 +657,6 @@ class RecordKeeper():
         
     def __repr__(self):
         size = len(self)
-        import json
         # fallback case first
         representer = attempt(lambda: indent(representer.__repr__()), default=self.local_data)
         # ideal case
@@ -717,6 +722,21 @@ class RecordKeeper():
     
     def __json__(self):
         return [ each.__json__() for each in self ]
+    
+    def live_write_to(self, path, *, as_yaml=None):
+        if as_yaml != True:
+            raise Exception(f'''.live_write_to() currently needs the argument as_yaml=True\ne.g. .live_write_to(path, as_yaml=True)''')
+        
+        # clear existing data, make sure folder exists
+        FS.write(data="", to=path)
+        local_and_parent_data = AncestorDict(ancestors=self.local_data_lineage).__json__()
+        self._live_files.append(open(path, 'a'))
+        self._live_files[-1].write(f'''parent_data_snapshot: {json.dumps(local_and_parent_data, indent=4)}\n''')
+        self._live_files[-1].write(f'''records:\n''')
+    
+    def __del__(self):
+        for each in self._live_files:
+            each.close()
 
 class Experiment(object):
     def __init__(self, internal_experiment_info, save_experiment):

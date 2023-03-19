@@ -77,6 +77,14 @@ optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
 [[package]]
+name = "file-system-py"
+version = "0.0.10"
+description = "All-in-one file manipulation"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "idna"
 version = "3.2"
 description = "Internationalized Domain Names in Applications (IDNA)"
@@ -404,7 +412,7 @@ testing = ["func-timeout", "jaraco.itertools", "pytest (>=4.6)", "pytest-black (
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<3.12"
-content-hash = "c9179e55c026fe8f69327066627ddf34ca20071af13cfa2743a3c08d15765b54"
+content-hash = "451f56651597083f5344d731499a5bd81dabd00ee0f938d0243e33bf44923283"
 
 [metadata.files]
 bleach = [
@@ -494,6 +502,10 @@ cryptography = [
 docutils = [
     {file = "docutils-0.17.1-py2.py3-none-any.whl", hash = "sha256:cf316c8370a737a022b72b56874f6602acf974a37a9fba42ec2876387549fc61"},
     {file = "docutils-0.17.1.tar.gz", hash = "sha256:686577d2e4c32380bb50cbb22f575ed742d58168cee37e99117a854bcd88f125"},
+]
+file-system-py = [
+    {file = "file_system_py-0.0.10-py3-none-any.whl", hash = "sha256:a011de4e02c3f075f3227000a1a54a82b794451fd51d06118ff96423846e8257"},
+    {file = "file_system_py-0.0.10.tar.gz", hash = "sha256:3792731ce481323aada84b17cbab95a3c1cc491dc81f1e7026e1eab477865f1d"},
 ]
 idna = [
     {file = "idna-3.2-py3-none-any.whl", hash = "sha256:14475042e284991034cb48e06f6851428fb14c4dc953acd9be9a5e95c7b6dd7a"},
