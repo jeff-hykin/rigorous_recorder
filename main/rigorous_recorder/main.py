@@ -600,7 +600,6 @@ class RecordKeeper():
         data.update(kwargs)
         self.pending_record.update(data)
         return self
-    
 
     def commit(self,*, additional_info=None):
         # finalize the record
@@ -637,7 +636,8 @@ class RecordKeeper():
         return RecordKeeper(kwargs).set_parent(self)
     
     def __iter__(self):
-        return self.records
+        for each in self.records:
+            yield each
     
     def __len__(self):
         if self.collection is None:
@@ -714,6 +714,9 @@ class RecordKeeper():
 
     def save_to(self, path):
         large_pickle_save(self, path)
+    
+    def __json__(self):
+        return [ each.__json__() for each in self ]
 
 class Experiment(object):
     def __init__(self, internal_experiment_info, save_experiment):
