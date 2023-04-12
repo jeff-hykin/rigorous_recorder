@@ -664,10 +664,11 @@ class RecordKeeper():
         # parent data
         all_parents = []
         parent_data = "    {"
-        for each_key, each_value in self.parent.items():
-            parent_data += f'\n        "{each_key}":' + indent(
-                attempt(lambda: json.dumps(each_value, indent=4), default=f"{each_value}")
-            )
+        if self.parent:
+            for each_key, each_value in self.parent.items():
+                parent_data += f'\n        "{each_key}":' + indent(
+                    attempt(lambda: json.dumps(each_value, indent=4), default=f"{each_value}")
+                )
         parent_data += "\n    }"
         
         return f"""{'{'}\n    number_of_records: {size},\n    records: [ ... ],\n    local_data: {representer},\n    parent_data:{parent_data}\n{'}'}"""
