@@ -26,9 +26,6 @@ setuptools.setup(
     license=package_info["license"],
     packages=[package_info["name"]],
     install_requires=[
-        "simple-namespace >= 1.0.0",
-        "super-map >= 1.2.1",
-        "super-hash >= 1.2.6",
     ],
     classifiers=[
         # examples:

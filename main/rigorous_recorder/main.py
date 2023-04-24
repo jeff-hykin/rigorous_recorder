@@ -2,9 +2,9 @@ from time import time as now
 from random import random
 import json
 
-import file_system_py as FS
-from super_map import LazyDict
-from super_hash import super_hash
+from .__dependencies__ import file_system_py as FS
+from .__dependencies__.super_map import LazyDict
+from .__dependencies__.super_hash import super_hash
 
 # TODO:
     # have each experiment be given their own pickle file
@@ -161,11 +161,28 @@ class AncestorDict(dict):
     def __json__(self):
         return self.compressed
 
+    def __deep_copy__(self, memo={}):
+        from copy import deepcopy
+        if id(self) in memo:
+            return memo[id(self)]
+        
+        new_itself = {}
+        the_copy = AncestorDict(
+            ancestors=list(self.ancestors),
+            itself=new_itself,
+        )
+        memo[id(self)] = the_copy
+        # cant call deepcopy until id(self) is added to the memo
+        for each_key, each_value in self.itself.items():
+            new_itself[each_key] = deepcopy(each_value, memo)
+        
+        return the_copy
+
 class AncestorMask(dict):
     def __init__(self, *, ancestors, index, frame):
         self.ancestors = ancestors
         if not isinstance(self.ancestors, (list, tuple)):
-            raise Exception('for AncestorDict(), ancestors needs to be a dict')
+            raise Exception('for AncestorDict(), ancestors needs to be a list or tuple')
         if type(frame) != dict:
             raise Exception('for AncestorDict(), frame needs to be a pure dict')
         self.frame = frame
@@ -284,6 +301,25 @@ class AncestorMask(dict):
     
     def __json__(self):
         return self.compressed
+        
+    def __deep_copy__(self, memo={}):
+        from copy import deepcopy
+        self_id = id(self)
+        if self_id in memo:
+            return memo[self_id]
+        
+        new_frame = {}
+        the_copy = AncestorMask(
+            ancestors=list(self.ancestors),
+            index=self.index,
+            frame=new_frame,
+        )
+        memo[self_id] = the_copy
+        # cant call deepcopy until id(self) is added to the memo
+        for each_key, each_value in self.frame.items():
+            new_frame[each_key] = deepcopy(each_value, memo)
+        
+        return the_copy
 
 class Recorder():
     @classmethod
