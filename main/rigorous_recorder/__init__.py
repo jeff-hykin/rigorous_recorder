@@ -770,6 +770,7 @@ class RecordKeeper():
         self._live_files.append(open(path, 'a'))
         self._live_files[-1].write(f'''parent_data_snapshot: {json.dumps(local_and_parent_data, indent=4)}\n''')
         self._live_files[-1].write(f'''records:\n''')
+        return self
     
     def __del__(self):
         for each in self._live_files:

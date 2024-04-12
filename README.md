@@ -90,13 +90,23 @@ recorder.save_to("where/ever/you_want.pickle")
 
 `pip install rigorous-recorder`
 
+Super simple usage:
+
+```python
+from rigorous_recorder import RecordKeeper
+record_keeper = RecordKeeper().live_write_to("where/ever/you_want.yaml", as_yaml=True)
+record_keeper.push(x=1, y=1)
+```
+
+Project/Experiment collection usage:
+
 ```python
 from rigorous_recorder import RecordKeeper, ExperimentCollection
 
 from statistics import mean as average
 from random import random, sample, choices
 
-collection = ExperimentCollection("data/my_study") # <- this string is a filepath 
+collection = ExperimentCollection("data/my_study") # <- filepath 
 number_of_new_experiments = 1
 
 for _ in range(number_of_new_experiments):

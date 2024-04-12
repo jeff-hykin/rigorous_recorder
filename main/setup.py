@@ -1,5 +1,6 @@
 import setuptools
 import toml
+from file_system_py import iterate_paths_in
 
 # 
 # get the data out of the toml file
@@ -27,6 +28,14 @@ setuptools.setup(
     packages=[package_info["name"]],
     install_requires=[
     ],
+    setup_requires=['setuptools_scm', 'file_system_py', 'toml'],
+    package_data={
+        # include all files/folders in the module (recursively)
+        package_info["name"]: [
+            each[len(package_info["name"])+1:]
+                for each in iterate_paths_in(package_info["name"], recursively=True)
+        ],
+    },
     classifiers=[
         # examples:
         # 'Development Status :: 5 - Production/Stable',
