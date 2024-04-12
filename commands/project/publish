@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
 cd "$FORNIX_FOLDER/main"
-rm -rf ./dist
-python setup.py sdist bdist_wheel
-if [ -d "./dist" ]
-then
-    stty sane 2>/dev/null
-    twine upload dist/*
-fi
-
 version="$(python -c '
 import setuptools
 import toml
@@ -19,7 +11,37 @@ toml_info = toml.load("../pyproject.toml")
 package_info = {**toml_info["tool"]["poetry"], **toml_info["tool"]["extra"]}
 print(package_info["version"])
 ')"
+if [ -z "$version" ]
+then
+    echo "couldnt get version :/ check publish script"
+fi
+
+name="$(python -c '
+import setuptools
+import toml
+
+# 
+# get the data out of the toml file
+# 
+toml_info = toml.load("../pyproject.toml")
+package_info = {**toml_info["tool"]["poetry"], **toml_info["tool"]["extra"]}
+print(package_info["name"])
+')"
+if [ -z "$name" ]
+then
+    echo "couldnt get name :/ check publish script"
+fi
+
+rm -rf ./dist
+rm -rf ./build
+rm -rf "./$name.egg-info"
+rm -rf "./.eggs"
+python setup.py sdist bdist_wheel
+if [ -d "./dist" ]
+then
+    stty sane 2>/dev/null
+    twine upload dist/*
+fi
 
 # tag it
-git tag "$version"
-git push origin "$version"
+git tag "$version" && git push origin "$version"

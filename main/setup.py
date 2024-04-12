@@ -1,18 +1,28 @@
 import setuptools
 import toml
+import os
 from file_system_py import iterate_paths_in
 
+folder =  os.path.abspath(os.path.dirname(__file__))
 # 
 # get the data out of the toml file
 # 
-toml_info = toml.load("../pyproject.toml")
+
+toml_info = toml.load(f"{folder}/../pyproject.toml")
 package_info = {**toml_info["tool"]["poetry"], **toml_info["tool"]["extra"]}
 
 # 
 # get the data out of the readme file
 # 
-with open("../README.md", "r") as file_handle:
+with open(f"{folder}/../README.md", "r") as file_handle:
     long_description = file_handle.read()
+
+packge_path = f"""{folder}/{package_info["name"]}"""
+names = [
+    each[len(packge_path)+1:]
+        for each in iterate_paths_in(packge_path, recursively=True)
+            if os.path.isfile(each) and not each.endswith(".pyc") and not any([ sub_name in each for sub_name in ['/settings/.cache','/settings/during_clean','/settings/during_manual_start','/settings/during_purge','/settings/during_start','/settings/during_start_prep','/settings/extensions','/settings/home','/settings/requirements','/settings/fornix_core',] ])
+]
 
 # 
 # generate the project
@@ -28,13 +38,10 @@ setuptools.setup(
     packages=[package_info["name"]],
     install_requires=[
     ],
-    setup_requires=['setuptools_scm', 'file_system_py', 'toml'],
+    setup_requires=['file_system_py', 'toml'],
+    include_package_data=True,
     package_data={
-        # include all files/folders in the module (recursively)
-        package_info["name"]: [
-            each[len(package_info["name"])+1:]
-                for each in iterate_paths_in(package_info["name"], recursively=True)
-        ],
+        package_info["name"]: names,
     },
     classifiers=[
         # examples:
